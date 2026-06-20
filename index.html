@@ -37,7 +37,7 @@ const ADMIN_PASSCODE = "sidameinu714!";
 // (2) Supabase 설정 — 학급 전체 제출을 한곳에 모으려면 필수입니다.
 //     본인 Supabase 프로젝트의 Project URL과 anon public key로 교체하세요.
 //     교체하지 않으면 이 기기에서만 저장되는 localStorage 모드로 동작합니다.
-const SUPABASE_URL = "https://tqzfzcysezgmbrcoapxq.supabase.co/rest/v1/";       // 예: https://abcdefgh.supabase.co
+const SUPABASE_URL = "https://tqzfzcysezgmbrcoapxq.supabase.co";       // Project URL (/rest/v1/ 없이 기본 URL)
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxemZ6Y3lzZXpnbWJyY29hcHhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5NTkyNTgsImV4cCI6MjA5NzUzNTI1OH0.JV5x22nrhEpKzsCWppQCLyWvhfvAMoktKutuVSlMyV8Y";     // Project Settings > API > anon public
 
 /* ===================== 저장소 추상화 (Supabase ↔ localStorage) ===================== */
@@ -308,6 +308,52 @@ function InfoTab() {
 }
 
 /* ===================== ADMIN PANEL ===================== */
+function StatsPanel({ entries }) {
+  const total = entries.length;
+  if (total === 0) return <div style={{ color: "#667", fontSize: 13, padding: 16, textAlign: "center" }}>아직 제출 데이터가 없습니다.</div>;
+  const outcomeDefs = [
+    { key: "한국 승", color: "#C8102E" },
+    { key: "무승부", color: "#7aa3cc" },
+    { key: "남아공 승", color: "#007A4D" },
+  ];
+  const oc = {}; entries.forEach((e) => { oc[e.outcome] = (oc[e.outcome] || 0) + 1; });
+  const sc = {}; entries.forEach((e) => { sc[e.scorer] = (sc[e.scorer] || 0) + 1; });
+  const top = Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 12 }}>승 · 무 · 패 예측 비율</div>
+      {outcomeDefs.map((o) => {
+        const cnt = oc[o.key] || 0; const pct = Math.round((cnt / total) * 100);
+        return (
+          <div key={o.key} style={{ marginBottom: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+              <span>{o.key}</span>
+              <span style={{ fontWeight: 700, color: o.color }}>{cnt}표 ({pct}%)</span>
+            </div>
+            <div style={{ background: "#0a0e16", borderRadius: 6, height: 10, overflow: "hidden" }}>
+              <div style={{ width: pct + "%", height: "100%", background: "linear-gradient(90deg, " + o.color + "88, " + o.color + ")", transition: "width 0.6s" }} />
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, letterSpacing: "0.08em", margin: "20px 0 12px" }}>⚽ 첫 득점 선수 득표율 TOP 5</div>
+      {top.map(([name, cnt], i) => {
+        const pct = Math.round((cnt / total) * 100);
+        return (
+          <div key={name} style={{ marginBottom: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+              <span><span style={{ color: "#ffcf6b", fontWeight: 800 }}>{i + 1}.</span> {name}</span>
+              <span style={{ fontWeight: 700, color: "#ffcf6b" }}>{cnt}표 ({pct}%)</span>
+            </div>
+            <div style={{ background: "#0a0e16", borderRadius: 6, height: 8, overflow: "hidden" }}>
+              <div style={{ width: pct + "%", height: "100%", background: "linear-gradient(90deg, #ffcf6b88, #ffcf6b)", transition: "width 0.6s" }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 function AdminPanel({ adminAuthed, pass, setPass, checkPass, adminError, entries, loadingAdmin, loadEntries, downloadExcel }) {
   if (!adminAuthed) {
     return (
@@ -370,6 +416,7 @@ function PredictTab() {
   const [scorer, setScorer] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [statEntries, setStatEntries] = useState(null);
 
   const [adminOpen, setAdminOpen] = useState(false);
   const [pass, setPass] = useState("");
@@ -405,6 +452,7 @@ function PredictTab() {
     if (k > s) return "한국 승"; if (k < s) return "남아공 승"; return "무승부";
   };
 
+  const loadStats = async () => { try { const all = await store.listEntries(); setStatEntries(all); } catch (e) {} };
   const submitFinal = async (chosenScorer) => {
     setError(""); setBusy(true);
     const entry = {
@@ -416,7 +464,7 @@ function PredictTab() {
       const exists = await store.getEntry(entry.studentId);
       if (exists) { setBusy(false); setError("이미 참여한 학번입니다. 중복 참여는 불가능합니다."); setPhase("intro"); return; }
       await store.setEntry(entry.studentId, entry);
-      setScorer(chosenScorer); setPhase("done");
+      setScorer(chosenScorer); await loadStats(); setPhase("done");
     } catch (e) { setError("제출 중 오류가 발생했습니다. 다시 시도해주세요."); }
     finally { setBusy(false); }
   };
@@ -556,6 +604,7 @@ function PredictTab() {
       )}
 
       {phase === "done" && (
+        <div>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: "44px 24px", textAlign: "center" }}>
           <div style={{ fontSize: 58, marginBottom: 12 }}>🎉</div>
           <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>참여가 완료되었습니다!</div>
@@ -566,6 +615,16 @@ function PredictTab() {
             <div>⚽ 첫 득점: <b>{scorer}</b></div>
           </div>
           <div style={{ fontSize: 12.5, color: "#e6a817", marginTop: 18 }}>제출 내용은 수정할 수 없습니다. 참여해 주셔서 감사합니다!</div>
+        </div>
+
+        <div style={{ marginTop: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: "24px 22px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 16, fontWeight: 900 }}>📊 학생들의 예측 통계</div>
+            <button onClick={loadStats} style={{ padding: "7px 14px", borderRadius: 9, border: "1px solid #2a3a4f", background: "transparent", color: "#cde", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🔄 새로고침</button>
+          </div>
+          <div style={{ fontSize: 12, color: "#667", marginBottom: 18 }}>지금까지 {statEntries ? statEntries.length : 0}명 참여 (나 포함)</div>
+          {statEntries ? <StatsPanel entries={statEntries} /> : <div style={{ color: "#667", fontSize: 13, padding: 20, textAlign: "center" }}>불러오는 중...</div>}
+        </div>
         </div>
       )}
     </div>
