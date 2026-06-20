@@ -37,8 +37,8 @@ const ADMIN_PASSCODE = "admin2026";
 // (2) Supabase 설정 — 학급 전체 제출을 한곳에 모으려면 필수입니다.
 //     본인 Supabase 프로젝트의 Project URL과 anon public key로 교체하세요.
 //     교체하지 않으면 이 기기에서만 저장되는 localStorage 모드로 동작합니다.
-const SUPABASE_URL = "PASTE_PROJECT_URL";       // 예: https://abcdefgh.supabase.co
-const SUPABASE_ANON_KEY = "PASTE_ANON_KEY";     // Project Settings > API > anon public
+const SUPABASE_URL = "https://tqzfzcysezgmbrcoapxq.supabase.co/rest/v1/";       // 예: https://abcdefgh.supabase.co
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxemZ6Y3lzZXpnbWJyY29hcHhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5NTkyNTgsImV4cCI6MjA5NzUzNTI1OH0.JV5x22nrhEpKzsCWppQCLyWvhfvAMoktKutuVSlMyV8Y";     // Project Settings > API > anon public
 
 /* ===================== 저장소 추상화 (Supabase ↔ localStorage) ===================== */
 const USE_SUPABASE = SUPABASE_URL && !SUPABASE_URL.includes("PASTE") && SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes("PASTE");
