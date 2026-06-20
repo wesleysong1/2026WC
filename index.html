@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>2026 월드컵 한국 vs 남아공 · 학급 승부예측</title>
+<title>2026 월드컵 한국 vs 남아공 · 전교생 승부예측</title>
 <style>
   html, body { margin: 0; padding: 0; background: #0a0e16; }
   * { box-sizing: border-box; }
   #root { min-height: 100vh; }
   @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
   input:focus { border-color: #C8102E !important; box-shadow: 0 0 0 3px rgba(200,16,46,0.15); }
   button:hover:not(:disabled) { filter: brightness(1.08); }
   ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: #2a3a4f; border-radius: 4px; }
@@ -34,7 +35,7 @@ const { useState, useEffect } = React;
 // (1) 관리자 비밀번호 (선생님만 아는 값으로 변경하세요)
 const ADMIN_PASSCODE = "sidameinu714!";
 
-// (2) Supabase 설정 — 학급 전체 제출을 한곳에 모으려면 필수입니다.
+// (2) Supabase 설정 — 전교생 제출을 한곳에 모으려면 필수입니다.
 //     본인 Supabase 프로젝트의 Project URL과 anon public key로 교체하세요.
 //     교체하지 않으면 이 기기에서만 저장되는 localStorage 모드로 동작합니다.
 const SUPABASE_URL = "https://tqzfzcysezgmbrcoapxq.supabase.co";       // Project URL (/rest/v1/ 없이 기본 URL)
@@ -319,6 +320,8 @@ function StatsPanel({ entries }) {
   const oc = {}; entries.forEach((e) => { oc[e.outcome] = (oc[e.outcome] || 0) + 1; });
   const sc = {}; entries.forEach((e) => { sc[e.scorer] = (sc[e.scorer] || 0) + 1; });
   const top = Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const scCount = {}; entries.forEach((e) => { const k = e.scoreKr + "-" + e.scoreSa; scCount[k] = (scCount[k] || 0) + 1; });
+  const topScores = Object.entries(scCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
   return (
     <div>
       <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 12 }}>승 · 무 · 패 예측 비율</div>
@@ -351,6 +354,20 @@ function StatsPanel({ entries }) {
           </div>
         );
       })}
+
+      <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, letterSpacing: "0.08em", margin: "20px 0 12px" }}>📊 인기 스코어 예측 TOP 3</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {topScores.map(([sc2, cnt], i) => {
+          const pct = Math.round((cnt / total) * 100);
+          return (
+            <div key={sc2} style={{ flex: "1 1 28%", minWidth: 92, background: "#0a0e16", border: "1px solid #1e2a3a", borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: i === 0 ? "#ffcf6b" : "#667", fontWeight: 700, marginBottom: 4 }}>{i + 1}위</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{sc2.replace("-", " : ")}</div>
+              <div style={{ fontSize: 11, color: "#8aa", marginTop: 4 }}>{cnt}명 ({pct}%)</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -498,7 +515,7 @@ function PredictTab() {
     <div>
       {!USE_SUPABASE && (
         <div style={{ background: "rgba(91,141,239,0.1)", border: "1px solid rgba(91,141,239,0.35)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 12.5, color: "#9cc0ff" }}>
-          ℹ️ 현재 <b>localStorage 모드</b>입니다 — 제출 데이터가 이 기기/브라우저에만 저장됩니다. 학급 전체 집계를 모으려면 코드 상단의 Supabase 설정을 입력하세요.
+          ℹ️ 현재 <b>localStorage 모드</b>입니다 — 제출 데이터가 이 기기/브라우저에만 저장됩니다. 전체 집계를 모으려면 코드 상단의 Supabase 설정을 입력하세요.
         </div>
       )}
 
@@ -634,6 +651,14 @@ function PredictTab() {
 /* ===================== APP ===================== */
 function App() {
   const [tab, setTab] = useState("info");
+  const [count, setCount] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => { try { const all = await store.listEntries(); if (alive) setCount(all.length); } catch (e) {} };
+    load();
+    const id = setInterval(load, 15000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: "#f0f4f8", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
       <div style={{ background: "linear-gradient(135deg, #0d1b2a 0%, #1a0a1a 50%, #0a1a0a 100%)", borderBottom: "1px solid #222" }}>
@@ -651,6 +676,14 @@ function App() {
             <div style={{ textAlign: "center", minWidth: 80 }}><div style={{ fontSize: 38, fontWeight: 900, color: "#444", fontStyle: "italic" }}>VS</div></div>
             <TeamHead team={TEAM_SA} />
           </div>
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.05)", border: "1px solid #2a3a4f", borderRadius: 20, padding: "5px 14px", fontSize: 13 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2ecc71", display: "inline-block", boxShadow: "0 0 0 3px rgba(46,204,113,0.2)", animation: "pulse 1.6s ease-in-out infinite" }} />
+              <span style={{ color: "#9ab" }}>실시간 참여</span>
+              <b style={{ color: "#fff", fontSize: 15 }}>{count === null ? "—" : count.toLocaleString()}</b>
+              <span style={{ color: "#9ab" }}>명</span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -662,7 +695,7 @@ function App() {
         </div>
         {tab === "info" ? <InfoTab /> : <PredictTab />}
         <div style={{ textAlign: "center", padding: "24px 0 32px", borderTop: "1px solid #111", marginTop: 8 }}>
-          <div style={{ fontSize: 12, color: "#333" }}>2026 FIFA World Cup · 학급 이벤트 · 예측은 참고용이며 실제 결과와 다를 수 있습니다</div>
+          <div style={{ fontSize: 12, color: "#333" }}>2026 FIFA World Cup · 전주신흥중학교 이벤트 · 예측은 참고용이며 실제 결과와 다를 수 있습니다</div>
         </div>
       </div>
     </div>

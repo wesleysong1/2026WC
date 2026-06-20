@@ -1,0 +1,766 @@
+import { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
+
+const ADMIN_PASSCODE = "admin2026"; // 관리자 비밀번호 (코드에서 변경 가능)
+const STORAGE_PREFIX = "wc2026a3:";
+
+// ===== 팀 정보 =====
+const TEAM_KR = {
+  name: "대한민국", flag: "🇰🇷", code: "kr", ranking: 23, record: "1승 1패", points: 3, position: "A조 2위",
+  color: "#C8102E", gf: 2, ga: 2, coach: "홍명보", style: "조직적 압박 + 빠른 역습",
+  key: ["손흥민 (주장)", "이강인", "황희찬", "김민재"],
+};
+const TEAM_SA = {
+  name: "남아프리카공화국", flag: "🇿🇦", code: "za", ranking: 62, record: "1무 1패", points: 1, position: "A조 4위",
+  color: "#007A4D", gf: 1, ga: 2, coach: "휴고 브로스", style: "피지컬 + 카운터 역습",
+  key: ["호넨 윌리엄스 (주장/GK)", "포스터", "모코에나", "모포켕"],
+};
+
+// ===== 포지션별 선수 명단 =====
+const SQUADS = {
+  KR: {
+    flag: "🇰🇷", code: "kr", name: "대한민국", color: "#C8102E",
+    positions: [
+      { pos: "공격수", players: ["손흥민", "오현규", "조규성"] },
+      { pos: "미드필더", players: ["이강인", "황희찬", "황인범", "이재성", "백승호", "배준호", "양현준", "엄지성", "이동경", "김진규"] },
+      { pos: "수비수", players: ["김민재", "설영우", "조위제", "이태석", "김문환", "박진섭", "이기혁", "이한범", "김태현", "카스트로프"] },
+    ],
+  },
+  SA: {
+    flag: "🇿🇦", code: "za", name: "남아공", color: "#007A4D",
+    positions: [
+      { pos: "공격수", players: ["포스터", "모포켕", "아폴리스", "레이너스", "막고파", "모레미", "마세코"] },
+      { pos: "미드필더", players: ["모코에나", "아담스", "음바타", "세벨레벨레"] },
+      { pos: "수비수", players: ["무다우", "모디바", "음보카지", "오콘", "마카냐", "마툴루디", "시비시", "은다마네", "카비니", "크로스"] },
+    ],
+  },
+};
+const SPECIAL_OPTIONS = ["자책골", "득점 없음 (0-0)"];
+
+export default function App() {
+  const [tab, setTab] = useState("info"); // info | predict
+  const C = { bg: "#0a0e16", card: "#0d1520", border: "#1e3a5f", accent: "#C8102E" };
+  const [count, setCount] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try { const list = await window.storage.list("wc2026a3:", true); if (alive) setCount((list?.keys || []).length); } catch (e) {}
+    };
+    load();
+    const id = setInterval(load, 15000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: "#f0f4f8", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+      {/* ===== Header (첫 사이트 디자인) ===== */}
+      <div style={{ background: "linear-gradient(135deg, #0d1b2a 0%, #1a0a1a 50%, #0a1a0a 100%)", borderBottom: "1px solid #222" }}>
+        <div style={{ background: "#C8102E", padding: "6px 0", overflow: "hidden" }}>
+          <div style={{ display: "inline-block", whiteSpace: "nowrap", animation: "marquee 22s linear infinite", fontSize: 13, fontWeight: 600, letterSpacing: "0.05em" }}>
+            🔴 LIVE · 2026 FIFA 북중미 월드컵 A조 3차전 &nbsp;|&nbsp; <Flag code="kr" size={12} /> 대한민국 vs <Flag code="za" size={12} /> 남아프리카공화국 &nbsp;|&nbsp; 📅 6월 25일 (한국시간 오전 10:00) &nbsp;|&nbsp; 📍 에스타디오 BBVA, 몬테레이 · 멕시코 &nbsp;|&nbsp; 🏫 전주신흥중학교 승부예측 이벤트 &nbsp;|&nbsp; 🔴 LIVE · 2026 FIFA 북중미 월드컵 A조 3차전 &nbsp;|&nbsp;
+          </div>
+        </div>
+        <div style={{ maxWidth: 760, margin: "0 auto", padding: "28px 20px 22px" }}>
+          <div style={{ textAlign: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", color: "#C8102E", textTransform: "uppercase" }}>
+              2026 FIFA WORLD CUP · GROUP A · MATCHDAY 3
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 28 }}>
+            <TeamHead team={TEAM_KR} />
+            <div style={{ textAlign: "center", minWidth: 80 }}>
+              <div style={{ fontSize: 38, fontWeight: 900, color: "#444", fontStyle: "italic" }}>VS</div>
+            </div>
+            <TeamHead team={TEAM_SA} />
+          </div>
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.05)", border: "1px solid #2a3a4f", borderRadius: 20, padding: "5px 14px", fontSize: 13 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2ecc71", display: "inline-block", boxShadow: "0 0 0 3px rgba(46,204,113,0.2)", animation: "pulse 1.6s ease-in-out infinite" }} />
+              <span style={{ color: "#9ab" }}>실시간 참여</span>
+              <b style={{ color: "#fff", fontSize: 15 }}>{count === null ? "—" : count.toLocaleString()}</b>
+              <span style={{ color: "#9ab" }}>명</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Tabs ===== */}
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 20px" }}>
+        <div style={{ display: "flex", borderBottom: "1px solid #222", marginBottom: 26 }}>
+          {[
+            { key: "info", label: "📋 경기 정보 & 진출 경우의 수" },
+            { key: "predict", label: "⚽ 승부예측 참여하기" },
+          ].map((t) => (
+            <button key={t.key} onClick={() => setTab(t.key)} style={{
+              flex: 1, background: "none", border: "none",
+              borderBottom: tab === t.key ? "2px solid #C8102E" : "2px solid transparent",
+              color: tab === t.key ? "#fff" : "#667", padding: "14px 12px", fontSize: 14,
+              fontWeight: tab === t.key ? 700 : 400, cursor: "pointer", transition: "all 0.2s",
+            }}>{t.label}</button>
+          ))}
+        </div>
+
+        {tab === "info" ? <InfoTab C={C} /> : <PredictTab C={C} />}
+
+        <div style={{ textAlign: "center", padding: "24px 0 32px", borderTop: "1px solid #111", marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: "#333" }}>
+            2026 FIFA World Cup · 전주신흥중학교 이벤트 · 예측은 참고용이며 실제 결과와 다를 수 있습니다
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+        input:focus { border-color: #C8102E !important; box-shadow: 0 0 0 3px rgba(200,16,46,0.15); }
+        button:hover:not(:disabled) { filter: brightness(1.08); }
+        ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: #2a3a4f; border-radius: 4px; }
+      `}</style>
+    </div>
+  );
+}
+
+function Flag({ code, size = 22, style }) {
+  return <img src={"https://flagcdn.com/h80/" + code + ".png"} alt="" aria-hidden="true"
+    style={{ height: size, width: "auto", borderRadius: 3, verticalAlign: "middle", display: "inline-block", boxShadow: "0 0 0 1px rgba(255,255,255,0.12)", ...style }} />;
+}
+function TeamHead({ team }) {
+  const isKr = team.flag === "🇰🇷";
+  return (
+    <div style={{ textAlign: "center", flex: 1 }}>
+      <div style={{ marginBottom: 6 }}><Flag code={team.code} size={52} /></div>
+      <div style={{ fontSize: 19, fontWeight: 800 }}>{team.name}</div>
+      <div style={{ fontSize: 12, color: "#aaa", marginTop: 3 }}>FIFA #{team.ranking}</div>
+      <div style={{
+        display: "inline-block", marginTop: 7, borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 600,
+        background: isKr ? "rgba(200,16,46,0.15)" : "rgba(0,122,77,0.15)",
+        border: `1px solid ${isKr ? "rgba(200,16,46,0.4)" : "rgba(0,122,77,0.4)"}`,
+        color: isKr ? "#ff6680" : "#00d97e",
+      }}>{team.position} · 승점 {team.points}</div>
+    </div>
+  );
+}
+
+// ================= INFO TAB =================
+function InfoTab({ C }) {
+  const scenarios = [
+    { result: "한국 승 ✅", color: "#C8102E", outcome: "A조 2위로 토너먼트(32강) 확정. 경우에 따라 조 1위도 가능." },
+    { result: "무승부 🤝", color: "#7aa3cc", outcome: "A조 2위로 토너먼트 확정. 체코가 멕시코를 이겨 승점이 같아져도 맞대결 우위(1차전 2-1)로 한국이 2위." },
+    { result: "남아공 승 ⚠️", color: "#e6a817", outcome: "조 3위로 밀려 와일드카드 경쟁. 멕시코까지 이기면 한국은 탈락 위기." },
+  ];
+  const matchdays = [
+    { md: "1차전", games: [
+      { hc: "mx", h: "멕시코", hs: 1, as: 0, ac: "za", a: "남아공" },
+      { hc: "kr", h: "대한민국", hs: 2, as: 1, ac: "cz", a: "체코", hi: true },
+    ]},
+    { md: "2차전", games: [
+      { hc: "mx", h: "멕시코", hs: 1, as: 0, ac: "kr", a: "대한민국", ai: true },
+      { hc: "cz", h: "체코", hs: 1, as: 1, ac: "za", a: "남아공" },
+    ]},
+  ];
+  const standings = [
+    { rank: 1, code: "mx", team: "멕시코", p: 2, w: 2, d: 0, l: 0, gd: "+2", pts: 6 },
+    { rank: 2, code: "kr", team: "대한민국", p: 2, w: 1, d: 0, l: 1, gd: "0", pts: 3, hi: "#C8102E" },
+    { rank: 3, code: "cz", team: "체코", p: 2, w: 0, d: 1, l: 1, gd: "-1", pts: 1 },
+    { rank: 4, code: "za", team: "남아공", p: 2, w: 0, d: 1, l: 1, gd: "-2", pts: 1, hi: "#007A4D" },
+  ];
+  return (
+    <div>
+      {/* 조별리그 진행 상황 */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, marginBottom: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>📅 A조 조별리그 진행 상황</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 }}>
+          {matchdays.map((mdObj) => (
+            <div key={mdObj.md}>
+              <div style={{ fontSize: 11, color: "#7aa3cc", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 8 }}>{mdObj.md}</div>
+              {mdObj.games.map((g, i) => (
+                <div key={i} style={{ background: "#0a1020", borderRadius: 10, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: g.hi ? 800 : 500, color: g.hi ? "#fff" : "#cdd", flex: 1, textAlign: "right" }}>{g.h} <Flag code={g.hc} size={14} /></span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: "#ffcf6b", whiteSpace: "nowrap", padding: "0 4px" }}>{g.hs} : {g.as}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: g.ai ? 800 : 500, color: g.ai ? "#fff" : "#cdd", flex: 1 }}><Flag code={g.ac} size={14} /> {g.a}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* 순위표 */}
+        <div style={{ overflowX: "auto", border: "1px solid #16212f", borderRadius: 10 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ background: "#0a1020", color: "#8aa" }}>
+                {["순위", "팀", "경기", "승", "무", "패", "득실", "승점"].map((h, i) => (
+                  <th key={h} style={{ padding: "8px 6px", textAlign: i === 1 ? "left" : "center", fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {standings.map((r) => (
+                <tr key={r.rank} style={{ borderTop: "1px solid #16212f", background: r.hi ? `${r.hi}14` : "transparent" }}>
+                  <td style={{ padding: "8px 6px", textAlign: "center", fontWeight: 700, color: r.rank <= 2 ? "#ffcf6b" : "#9ab" }}>{r.rank}</td>
+                  <td style={{ padding: "8px 6px", fontWeight: r.hi ? 800 : 500 }}><Flag code={r.code} size={14} /> {r.team}</td>
+                  <td style={{ padding: "8px 6px", textAlign: "center", color: "#9ab" }}>{r.p}</td>
+                  <td style={{ padding: "8px 6px", textAlign: "center" }}>{r.w}</td>
+                  <td style={{ padding: "8px 6px", textAlign: "center" }}>{r.d}</td>
+                  <td style={{ padding: "8px 6px", textAlign: "center" }}>{r.l}</td>
+                  <td style={{ padding: "8px 6px", textAlign: "center", color: "#9ab" }}>{r.gd}</td>
+                  <td style={{ padding: "8px 6px", textAlign: "center", fontWeight: 800, color: "#fff" }}>{r.pts}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 팀 정보 */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+        {[TEAM_KR, TEAM_SA].map((team) => (
+          <div key={team.name} style={{ background: C.card, border: `1px solid ${team.color}33`, borderRadius: 16, padding: 20 }}>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <div style={{ marginBottom: 6 }}><Flag code={team.code} size={40} /></div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{team.name}</div>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 3 }}>감독: {team.coach}</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+              {[["전적", team.record], ["승점", `${team.points}점`], ["득점", `${team.gf}골`], ["실점", `${team.ga}골`]].map(([l, v]) => (
+                <div key={l} style={{ background: "#0a1020", borderRadius: 8, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 10, color: "#666", marginBottom: 2 }}>{l}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 10, color: "#666", marginBottom: 6, letterSpacing: "0.08em" }}>주요 선수</div>
+            {team.key.map((p) => (
+              <div key={p} style={{ fontSize: 12.5, color: "#bbb", padding: "4px 0", borderBottom: "1px solid #1a2030" }}>
+                <span style={{ color: team.color }}>▸ </span>{p}
+              </div>
+            ))}
+            <div style={{ marginTop: 12, background: "#0a1020", borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>플레이 스타일</div>
+              <div style={{ fontSize: 12.5, color: "#ccc" }}>{team.style}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 진출 경우의 수 */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, marginBottom: 18 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>🗺️ 대한민국 토너먼트 진출 경우의 수</div>
+        <div style={{ fontSize: 12, color: "#667", marginBottom: 18 }}>3차전(남아공전) 결과별 시나리오 · 이번 대회 48개국 체제는 조 3위 일부도 진출</div>
+        {scenarios.map((s) => (
+          <div key={s.result} style={{ background: "#0a1020", border: `1px solid ${s.color}33`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, color: s.color, marginBottom: 5, fontSize: 15 }}>{s.result}</div>
+            <div style={{ fontSize: 13, color: "#bbb", lineHeight: 1.6 }}>{s.outcome}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: "linear-gradient(135deg, rgba(200,16,46,0.08), rgba(0,0,0,0))", border: "1px solid rgba(200,16,46,0.2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ fontSize: 13, color: "#ff6680", fontWeight: 700, marginBottom: 12 }}>🔑 핵심 포인트</div>
+        {[
+          "한국은 비기기만 해도 A조 2위로 진출 — 유리한 고지",
+          "남아공은 반드시 이겨야 토너먼트 진출 — 사활을 건 경기",
+          "남아공의 스피드·피지컬 역습에 주의 필요",
+          "이강인·손흥민의 창의성이 경기 흐름을 가를 변수",
+        ].map((t, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, marginBottom: 9 }}>
+            <span style={{ color: "#C8102E", fontWeight: 700 }}>•</span>
+            <span style={{ fontSize: 13.5, color: "#ccc", lineHeight: 1.5 }}>{t}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ================= PREDICT TAB =================
+function PredictTab({ C }) {
+  // phase: intro | identity | score | scorer | done
+  const [phase, setPhase] = useState("intro");
+  const [studentId, setStudentId] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [scoreKr, setScoreKr] = useState("");
+  const [scoreSa, setScoreSa] = useState("");
+  const [scorer, setScorer] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [statEntries, setStatEntries] = useState(null);
+
+  // admin
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [pass, setPass] = useState("");
+  const [adminAuthed, setAdminAuthed] = useState(false);
+  const [entries, setEntries] = useState([]);
+  const [loadingAdmin, setLoadingAdmin] = useState(false);
+  const [adminError, setAdminError] = useState("");
+
+  const keyFor = (id) => `${STORAGE_PREFIX}${id}`;
+
+  const startIdentity = () => { setError(""); setPhase("identity"); };
+
+  const submitIdentity = async () => {
+    setError("");
+    const id = studentId.trim();
+    if (!id) return setError("학번을 입력해주세요.");
+    if (!studentName.trim()) return setError("이름을 입력해주세요.");
+    setBusy(true);
+    try {
+      let exists = null;
+      try { exists = await window.storage.get(keyFor(id), true); } catch (e) { exists = null; }
+      if (exists && exists.value) {
+        setBusy(false);
+        return setError(`이미 참여한 학번입니다 (${id}). 중복 참여 및 수정은 불가능합니다.`);
+      }
+      setPhase("score");
+    } catch (e) {
+      setError("확인 중 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitScore = () => {
+    setError("");
+    if (scoreKr === "" || scoreSa === "") return setError("양 팀의 예상 스코어를 입력해주세요.");
+    setPhase("scorer");
+  };
+
+  const outcomeFromScore = () => {
+    const k = parseInt(scoreKr), s = parseInt(scoreSa);
+    if (k > s) return "한국 승"; if (k < s) return "남아공 승"; return "무승부";
+  };
+
+  const loadStats = async () => {
+    try {
+      const list = await window.storage.list(STORAGE_PREFIX, true);
+      const keys = list?.keys || [];
+      const out = [];
+      for (const k of keys) { try { const r = await window.storage.get(k, true); if (r?.value) out.push(JSON.parse(r.value)); } catch (e) {} }
+      setStatEntries(out);
+    } catch (e) {}
+  };
+  const submitFinal = async (chosenScorer) => {
+    setError("");
+    setBusy(true);
+    const entry = {
+      studentId: studentId.trim(),
+      name: studentName.trim().slice(0, 30),
+      scoreKr: parseInt(scoreKr),
+      scoreSa: parseInt(scoreSa),
+      outcome: outcomeFromScore(),
+      scorer: chosenScorer,
+      submittedAt: new Date().toISOString(),
+    };
+    try {
+      let exists = null;
+      try { exists = await window.storage.get(keyFor(entry.studentId), true); } catch (e) { exists = null; }
+      if (exists && exists.value) {
+        setBusy(false);
+        setError("이미 참여한 학번입니다. 중복 참여는 불가능합니다.");
+        setPhase("intro");
+        return;
+      }
+      await window.storage.set(keyFor(entry.studentId), JSON.stringify(entry), true);
+      setScorer(chosenScorer);
+      await loadStats();
+      setPhase("done");
+    } catch (e) {
+      setError("제출 중 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetAll = () => {
+    setStudentId(""); setStudentName(""); setScoreKr(""); setScoreSa(""); setScorer(""); setError(""); setPhase("intro");
+  };
+
+  // ---- Admin ----
+  const loadEntries = async () => {
+    setLoadingAdmin(true);
+    try {
+      const list = await window.storage.list(STORAGE_PREFIX, true);
+      const keys = list?.keys || [];
+      const out = [];
+      for (const k of keys) {
+        try { const r = await window.storage.get(k, true); if (r?.value) out.push(JSON.parse(r.value)); } catch (e) {}
+      }
+      out.sort((a, b) => (a.studentId > b.studentId ? 1 : -1));
+      setEntries(out);
+    } catch (e) { setEntries([]); }
+    finally { setLoadingAdmin(false); }
+  };
+
+  useEffect(() => { if (adminAuthed) loadEntries(); }, [adminAuthed]);
+
+  const checkPass = () => {
+    if (pass === ADMIN_PASSCODE) { setAdminAuthed(true); setAdminError(""); }
+    else setAdminError("비밀번호가 올바르지 않습니다.");
+  };
+
+  const downloadExcel = () => {
+    const rows = entries.map((e, i) => ({
+      "번호": i + 1,
+      "학번": e.studentId,
+      "이름": e.name,
+      "한국 점수": e.scoreKr,
+      "남아공 점수": e.scoreSa,
+      "예측 결과": e.outcome,
+      "첫 득점 선수": e.scorer,
+      "제출 시각": new Date(e.submittedAt).toLocaleString("ko-KR"),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 6 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 22 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "승부예측 결과");
+    XLSX.writeFile(wb, `월드컵_승부예측_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // ===== Render =====
+  return (
+    <div>
+      {/* INTRO */}
+      {phase === "intro" && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: "40px 28px", textAlign: "center" }}>
+          <div style={{ fontSize: 52, marginBottom: 14 }}>⚽</div>
+          <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 10 }}>승부예측 이벤트에 참여하세요!</div>
+          <div style={{ fontSize: 14, color: "#9ab", lineHeight: 1.7, maxWidth: 420, margin: "0 auto 8px" }}>
+            ① 경기 스코어 예측, ② 첫 득점 선수 맞히기<br />두 가지를 예측하고 제출하면 참여 완료!
+          </div>
+          <div style={{ background: "rgba(230,168,23,0.1)", border: "1px solid rgba(230,168,23,0.3)", borderRadius: 10, padding: "12px 16px", margin: "20px auto 0", maxWidth: 440 }}>
+            <div style={{ fontSize: 13, color: "#ffcf6b", fontWeight: 600 }}>
+              ⚠️ 한 번 참여하면 중복 참여 및 제출 결과 수정이 불가능합니다.
+            </div>
+          </div>
+          <button onClick={startIdentity} style={{
+            marginTop: 26, background: "linear-gradient(135deg, #C8102E, #8b0020)", color: "#fff", border: "none",
+            borderRadius: 12, padding: "15px 44px", fontSize: 16, fontWeight: 800, cursor: "pointer", letterSpacing: "0.03em",
+          }}>🎯 승부예측 참여하기</button>
+
+          <div style={{ marginTop: 34 }}>
+            <button onClick={() => setAdminOpen(!adminOpen)} style={{ background: "none", border: "none", color: "#3a4a5f", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
+              🔒 관리자
+            </button>
+          </div>
+          {adminOpen && (
+            <AdminPanel {...{ adminAuthed, pass, setPass, checkPass, adminError, entries, loadingAdmin, loadEntries, downloadExcel }} />
+          )}
+        </div>
+      )}
+
+      {/* IDENTITY */}
+      {phase === "identity" && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: 28, maxWidth: 460, margin: "0 auto", position: "relative" }}>
+          <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>참여자 정보 입력</div>
+          <div style={{ fontSize: 13, color: "#8aa", marginBottom: 20 }}>학번과 이름을 정확히 입력해주세요.</div>
+
+          <Label>학번</Label>
+          <input value={studentId} onChange={(e) => { setStudentId(e.target.value); setError(""); }} placeholder="예: 1101" maxLength={15} style={inputStyle} />
+
+          <Label style={{ marginTop: 18 }}>이름</Label>
+          <input value={studentName} onChange={(e) => { setStudentName(e.target.value); setError(""); }} placeholder="예: 송우현" maxLength={30} style={inputStyle} />
+
+          <div style={{ background: "rgba(230,168,23,0.1)", border: "1px solid rgba(230,168,23,0.3)", borderRadius: 10, padding: "11px 14px", marginTop: 18 }}>
+            <div style={{ fontSize: 12.5, color: "#ffcf6b", fontWeight: 600, lineHeight: 1.5 }}>
+              ⚠️ 한 번 참여하면 중복 참여 및 제출 결과 수정이 불가능합니다.
+            </div>
+          </div>
+
+          {error && <div style={{ color: "#ff7088", fontSize: 13, marginTop: 14 }}>{error}</div>}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 22 }}>
+            <button onClick={resetAll} style={textBtn}>← 취소</button>
+            <button onClick={submitIdentity} disabled={busy} style={{
+              background: busy ? "#333" : "linear-gradient(135deg, #C8102E, #8b0020)", color: "#fff", border: "none",
+              borderRadius: 10, padding: "12px 32px", fontSize: 15, fontWeight: 700, cursor: busy ? "not-allowed" : "pointer",
+            }}>{busy ? "확인 중..." : "참여하기 →"}</button>
+          </div>
+        </div>
+      )}
+
+      {/* SCORE */}
+      {phase === "score" && (
+        <div style={{ background: "linear-gradient(135deg, #111 0%, #0d1a2a 100%)", border: `1px solid ${C.border}`, borderRadius: 18, padding: "30px 24px", maxWidth: 500, margin: "0 auto" }}>
+          <StepBadge n="1 / 2" label="경기 스코어 예측" />
+          <div style={{ fontSize: 13, color: "#7aa3cc", textAlign: "center", marginBottom: 24 }}>
+            {studentName} ({studentId}) 님 · 예상 스코어를 입력하세요
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ marginBottom: 8 }}><Flag code="kr" size={30} /></div>
+              <input value={scoreKr} onChange={(e) => { setScoreKr(e.target.value.replace(/[^0-9]/g, "").slice(0, 2)); setError(""); }} inputMode="numeric" placeholder="0" style={scoreBox("#C8102E")} />
+              <div style={{ fontSize: 12, color: "#8aa", marginTop: 6 }}>대한민국</div>
+            </div>
+            <div style={{ fontSize: 30, color: "#445", fontWeight: 800, paddingBottom: 22 }}>:</div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ marginBottom: 8 }}><Flag code="za" size={30} /></div>
+              <input value={scoreSa} onChange={(e) => { setScoreSa(e.target.value.replace(/[^0-9]/g, "").slice(0, 2)); setError(""); }} inputMode="numeric" placeholder="0" style={scoreBox("#007A4D")} />
+              <div style={{ fontSize: 12, color: "#8aa", marginTop: 6 }}>남아공</div>
+            </div>
+          </div>
+          {scoreKr !== "" && scoreSa !== "" && (
+            <div style={{ textAlign: "center", marginTop: 18, fontSize: 14, color: "#aaa" }}>
+              예측 결과: <b style={{ color: "#fff" }}>{outcomeFromScore()}</b>
+            </div>
+          )}
+          {error && <div style={{ color: "#ff7088", fontSize: 13, marginTop: 14, textAlign: "center" }}>{error}</div>}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24 }}>
+            <button onClick={() => { setPhase("identity"); setError(""); }} style={textBtn}>← 이전</button>
+            <button onClick={submitScore} style={{
+              background: "linear-gradient(135deg, #C8102E, #8b0020)", color: "#fff", border: "none",
+              borderRadius: 10, padding: "13px 32px", fontSize: 15, fontWeight: 700, cursor: "pointer",
+            }}>다음: 첫 득점 선수 →</button>
+          </div>
+        </div>
+      )}
+
+      {/* SCORER */}
+      {phase === "scorer" && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: "28px 22px" }}>
+          <StepBadge n="2 / 2" label="첫 득점 선수 맞히기 ⚽" />
+          <div style={{ fontSize: 13, color: "#7aa3cc", textAlign: "center", marginBottom: 22 }}>
+            첫 골을 넣을 선수를 한 명 선택한 뒤 <b style={{ color: "#ffcf6b" }}>제출하기</b> 버튼을 누르세요
+          </div>
+
+          {["KR", "SA"].map((teamKey) => {
+            const sq = SQUADS[teamKey];
+            return (
+              <div key={teamKey} style={{ marginBottom: 22 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12, color: sq.color }}>
+                  <Flag code={sq.code} size={20} /> {sq.name}
+                </div>
+                {sq.positions.map((grp) => (
+                  <div key={grp.pos} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: "#667", marginBottom: 7, letterSpacing: "0.08em", fontWeight: 600 }}>{grp.pos}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {grp.players.map((p) => {
+                        const val = `${sq.name} ${p}`;
+                        return <PlayerChip key={p} label={p} color={sq.color} selected={scorer === val} disabled={busy} onClick={() => { setScorer(val); setError(""); }} />;
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+
+          {/* 기타 옵션 (선수와 동일한 네모 칸) */}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: "#667", marginBottom: 7, letterSpacing: "0.08em", fontWeight: 600 }}>기타</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {SPECIAL_OPTIONS.map((p) => (
+                <PlayerChip key={p} label={p} color="#8a93a3" selected={scorer === p} disabled={busy} onClick={() => { setScorer(p); setError(""); }} />
+              ))}
+            </div>
+          </div>
+
+          {scorer && (
+            <div style={{ textAlign: "center", marginTop: 16, fontSize: 14, color: "#aaa" }}>
+              선택: <b style={{ color: "#ffcf6b" }}>{scorer}</b>
+            </div>
+          )}
+          {error && <div style={{ color: "#ff7088", fontSize: 13, marginTop: 14, textAlign: "center" }}>{error}</div>}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 22, gap: 12 }}>
+            <button onClick={() => { setPhase("score"); setError(""); }} disabled={busy} style={{
+              background: "#162536", color: "#cde", border: "1px solid #2a3a4f",
+              borderRadius: 10, padding: "13px 24px", fontSize: 15, fontWeight: 700, cursor: busy ? "not-allowed" : "pointer",
+            }}>← 이전 (스코어 수정)</button>
+            <button onClick={() => scorer && submitFinal(scorer)} disabled={busy || !scorer} style={{
+              background: (busy || !scorer) ? "#333" : "linear-gradient(135deg, #C8102E, #8b0020)", color: "#fff", border: "none",
+              borderRadius: 10, padding: "13px 36px", fontSize: 15, fontWeight: 800, cursor: (busy || !scorer) ? "not-allowed" : "pointer",
+            }}>{busy ? "제출 중..." : "제출하기 →"}</button>
+          </div>
+        </div>
+      )}
+
+      {/* DONE */}
+      {phase === "done" && (
+        <div>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: "44px 24px", textAlign: "center" }}>
+          <div style={{ fontSize: 58, marginBottom: 12 }}>🎉</div>
+          <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>참여가 완료되었습니다!</div>
+          <div style={{ fontSize: 14, color: "#9ab", marginBottom: 16 }}>
+            <b style={{ color: "#fff" }}>{studentName}</b> ({studentId}) 님의 예측이 정상 제출되었습니다.
+          </div>
+          <div style={{ background: "#0a1020", borderRadius: 12, padding: 18, maxWidth: 360, margin: "0 auto", textAlign: "left", fontSize: 14, lineHeight: 2 }}>
+            <div>📊 스코어: <b>한국 {scoreKr} : {scoreSa} 남아공</b></div>
+            <div>🏆 결과: <b>{outcomeFromScore()}</b></div>
+            <div>⚽ 첫 득점: <b>{scorer}</b></div>
+          </div>
+          <div style={{ fontSize: 12.5, color: "#e6a817", marginTop: 18 }}>
+            제출 내용은 수정할 수 없습니다. 참여해 주셔서 감사합니다!
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: "24px 22px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 16, fontWeight: 900 }}>📊 학생들의 예측 통계</div>
+            <button onClick={loadStats} style={{ padding: "7px 14px", borderRadius: 9, border: "1px solid #2a3a4f", background: "transparent", color: "#cde", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🔄 새로고침</button>
+          </div>
+          <div style={{ fontSize: 12, color: "#667", marginBottom: 18 }}>지금까지 {statEntries ? statEntries.length : 0}명 참여 (나 포함)</div>
+          {statEntries ? <StatsPanel entries={statEntries} /> : <div style={{ color: "#667", fontSize: 13, padding: 20, textAlign: "center" }}>불러오는 중...</div>}
+        </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatsPanel({ entries }) {
+  const total = entries.length;
+  if (total === 0) return <div style={{ color: "#667", fontSize: 13, padding: 16, textAlign: "center" }}>아직 제출 데이터가 없습니다.</div>;
+  const outcomeDefs = [
+    { key: "한국 승", color: "#C8102E" },
+    { key: "무승부", color: "#7aa3cc" },
+    { key: "남아공 승", color: "#007A4D" },
+  ];
+  const oc = {}; entries.forEach((e) => { oc[e.outcome] = (oc[e.outcome] || 0) + 1; });
+  const sc = {}; entries.forEach((e) => { sc[e.scorer] = (sc[e.scorer] || 0) + 1; });
+  const top = Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const scCount = {}; entries.forEach((e) => { const k = e.scoreKr + "-" + e.scoreSa; scCount[k] = (scCount[k] || 0) + 1; });
+  const topScores = Object.entries(scCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 12 }}>승 · 무 · 패 예측 비율</div>
+      {outcomeDefs.map((o) => {
+        const cnt = oc[o.key] || 0; const pct = Math.round((cnt / total) * 100);
+        return (
+          <div key={o.key} style={{ marginBottom: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+              <span>{o.key}</span>
+              <span style={{ fontWeight: 700, color: o.color }}>{cnt}표 ({pct}%)</span>
+            </div>
+            <div style={{ background: "#0a0e16", borderRadius: 6, height: 10, overflow: "hidden" }}>
+              <div style={{ width: pct + "%", height: "100%", background: "linear-gradient(90deg, " + o.color + "88, " + o.color + ")", transition: "width 0.6s" }} />
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, letterSpacing: "0.08em", margin: "20px 0 12px" }}>⚽ 첫 득점 선수 득표율 TOP 5</div>
+      {top.map(([name, cnt], i) => {
+        const pct = Math.round((cnt / total) * 100);
+        return (
+          <div key={name} style={{ marginBottom: 11 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+              <span><span style={{ color: "#ffcf6b", fontWeight: 800 }}>{i + 1}.</span> {name}</span>
+              <span style={{ fontWeight: 700, color: "#ffcf6b" }}>{cnt}표 ({pct}%)</span>
+            </div>
+            <div style={{ background: "#0a0e16", borderRadius: 6, height: 8, overflow: "hidden" }}>
+              <div style={{ width: pct + "%", height: "100%", background: "linear-gradient(90deg, #ffcf6b88, #ffcf6b)", transition: "width 0.6s" }} />
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, letterSpacing: "0.08em", margin: "20px 0 12px" }}>📊 인기 스코어 예측 TOP 3</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {topScores.map(([sc2, cnt], i) => {
+          const pct = Math.round((cnt / total) * 100);
+          return (
+            <div key={sc2} style={{ flex: "1 1 28%", minWidth: 92, background: "#0a0e16", border: "1px solid #1e2a3a", borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: i === 0 ? "#ffcf6b" : "#667", fontWeight: 700, marginBottom: 4 }}>{i + 1}위</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{sc2.replace("-", " : ")}</div>
+              <div style={{ fontSize: 11, color: "#8aa", marginTop: 4 }}>{cnt}명 ({pct}%)</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+function AdminPanel({ adminAuthed, pass, setPass, checkPass, adminError, entries, loadingAdmin, loadEntries, downloadExcel }) {
+  if (!adminAuthed) {
+    return (
+      <div style={{ marginTop: 16, maxWidth: 320, marginLeft: "auto", marginRight: "auto" }}>
+        <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="관리자 비밀번호"
+          onKeyDown={(e) => e.key === "Enter" && checkPass()}
+          style={{ ...inputStyle, marginTop: 0 }} />
+        {adminError && <div style={{ color: "#ff7088", fontSize: 12, marginTop: 8 }}>{adminError}</div>}
+        <button onClick={checkPass} style={{ width: "100%", marginTop: 10, padding: "11px", borderRadius: 10, border: "1px solid #2a3a4f", background: "#162536", color: "#cde", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          확인
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 18, textAlign: "left" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 800 }}>📥 관리자 · 제출 현황 ({entries.length}명)</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={loadEntries} style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid #2a3a4f", background: "transparent", color: "#cde", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🔄 새로고침</button>
+          <button onClick={downloadExcel} disabled={entries.length === 0} style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: entries.length ? "linear-gradient(135deg,#1d8a4f,#0f6b3a)" : "#333", color: "#fff", fontSize: 12, fontWeight: 700, cursor: entries.length ? "pointer" : "not-allowed" }}>⬇ 엑셀 다운로드</button>
+        </div>
+      </div>
+      {loadingAdmin ? (
+        <div style={{ color: "#667", fontSize: 13, padding: 20, textAlign: "center" }}>불러오는 중...</div>
+      ) : entries.length === 0 ? (
+        <div style={{ color: "#667", fontSize: 13, padding: 20, textAlign: "center" }}>아직 제출된 예측이 없습니다.</div>
+      ) : (
+        <div style={{ maxHeight: 300, overflowY: "auto", border: "1px solid #1e2a3a", borderRadius: 10 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ background: "#0a1020", color: "#8aa" }}>
+                {["학번", "이름", "스코어", "결과", "첫 득점"].map((h) => (
+                  <th key={h} style={{ padding: "9px 10px", textAlign: "left", fontWeight: 600, position: "sticky", top: 0, background: "#0a1020" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e) => (
+                <tr key={e.studentId} style={{ borderTop: "1px solid #16212f" }}>
+                  <td style={{ padding: "8px 10px", color: "#bcd" }}>{e.studentId}</td>
+                  <td style={{ padding: "8px 10px" }}>{e.name}</td>
+                  <td style={{ padding: "8px 10px" }}>{e.scoreKr}:{e.scoreSa}</td>
+                  <td style={{ padding: "8px 10px", color: "#9ab" }}>{e.outcome}</td>
+                  <td style={{ padding: "8px 10px", color: "#9ab" }}>{e.scorer}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlayerChip({ label, color, onClick, disabled, selected }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      padding: "9px 14px", borderRadius: 12, cursor: disabled ? "not-allowed" : "pointer",
+      fontSize: 13, fontWeight: selected ? 800 : 600,
+      border: `1.5px solid ${selected ? color : color + "55"}`,
+      background: selected ? `${color}38` : `${color}14`,
+      color: selected ? "#fff" : "#dfe8f0",
+      boxShadow: selected ? `0 0 0 2px ${color}40` : "none",
+      transition: "all 0.15s", whiteSpace: "nowrap",
+    }}
+      onMouseEnter={(e) => { if (!disabled && !selected) { e.currentTarget.style.background = `${color}28`; e.currentTarget.style.borderColor = color; } }}
+      onMouseLeave={(e) => { if (!selected) { e.currentTarget.style.background = `${color}14`; e.currentTarget.style.borderColor = `${color}55`; } }}
+    >{label}</button>
+  );
+}
+
+function StepBadge({ n, label }) {
+  return (
+    <div style={{ textAlign: "center", marginBottom: 6 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", color: "#C8102E" }}>STEP {n}</span>
+      <div style={{ fontSize: 19, fontWeight: 900, marginTop: 4 }}>{label}</div>
+    </div>
+  );
+}
+
+function Label({ children, style }) {
+  return <div style={{ fontSize: 13, fontWeight: 700, color: "#aab", marginBottom: 6, ...style }}>{children}</div>;
+}
+
+const inputStyle = {
+  width: "100%", boxSizing: "border-box", padding: "13px 14px", marginTop: 4, fontSize: 15,
+  background: "#0a0e16", border: "1px solid #1e3a5f", borderRadius: 11, color: "#fff", outline: "none",
+};
+const scoreBox = (color) => ({
+  width: 72, height: 72, textAlign: "center", fontSize: 34, fontWeight: 800,
+  background: "#0a1520", border: `2px solid ${color}66`, borderRadius: 12, color: "#fff", outline: "none",
+});
+const textBtn = { background: "none", border: "none", color: "#7a8a9a", fontSize: 14, cursor: "pointer", fontWeight: 600 };
