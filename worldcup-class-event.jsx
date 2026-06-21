@@ -194,6 +194,13 @@ function InfoTab({ C }) {
     { rank: 3, code: "cz", team: "체코", p: 2, w: 0, d: 1, l: 1, gd: "-1", pts: 1 },
     { rank: 4, code: "za", team: "남아공", p: 2, w: 0, d: 1, l: 1, gd: "-2", pts: 1, hi: "#007A4D" },
   ];
+  const drawCols = ["멕시코 승·무", "체코 1-0", "체코 2-1", "체코 3-2", "체코 2골차↑"];
+  const drawRows = [
+    { label: "0 : 0", cells: ["진출", "대기", "대기", "대기", "대기"] },
+    { label: "1 : 1", cells: ["진출", "진출", "대기", "대기", "대기"] },
+    { label: "2 : 2", cells: ["진출", "진출", "진출", "대기", "대기"] },
+    { label: "3 : 3 이상", cells: ["진출", "진출", "진출", "진출", "대기"] },
+  ];
   return (
     <div>
       {/* 조별리그 진행 상황 */}
@@ -274,16 +281,53 @@ function InfoTab({ C }) {
         ))}
       </div>
 
-      {/* 진출 경우의 수 */}
+      {/* 진출 경우의 수 (득점 조합 그리드) */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, marginBottom: 18 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>🗺️ 대한민국 토너먼트 진출 경우의 수</div>
-        <div style={{ fontSize: 12, color: "#667", marginBottom: 18 }}>3차전(남아공전) 결과별 시나리오 · 이번 대회 48개국 체제는 조 3위 일부도 진출</div>
-        {scenarios.map((s) => (
-          <div key={s.result} style={{ background: "#0a1020", border: `1px solid ${s.color}33`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
-            <div style={{ fontWeight: 700, color: s.color, marginBottom: 5, fontSize: 15 }}>{s.result}</div>
-            <div style={{ fontSize: 13, color: "#bbb", lineHeight: 1.6 }}>{s.outcome}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>🗺️ 한국 토너먼트 진출 경우의 수</div>
+        <div style={{ fontSize: 12, color: "#667", marginBottom: 16 }}>3차전은 <b style={{ color: "#9ab" }}>한국 vs 남아공</b>과 <b style={{ color: "#9ab" }}>멕시코 vs 체코</b>가 동시에 열립니다</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
+          <div style={{ background: "rgba(46,160,67,0.12)", border: "1px solid rgba(46,160,67,0.4)", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontWeight: 800, color: "#2ecc71", marginBottom: 5, fontSize: 14 }}>한국 승 → 직접 진출 확정</div>
+            <div style={{ fontSize: 12.5, color: "#bcd", lineHeight: 1.6 }}>승점 6점으로 2위 이내 확보. 다른 경기 결과와 무관하게 진출.</div>
           </div>
-        ))}
+          <div style={{ background: "rgba(200,16,46,0.1)", border: "1px solid rgba(200,16,46,0.4)", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontWeight: 800, color: "#ff6680", marginBottom: 5, fontSize: 14 }}>남아공에 패 → 직접 진출 실패</div>
+            <div style={{ fontSize: 12.5, color: "#bcd", lineHeight: 1.6 }}>3위 이하. 체코가 멕시코를 이기면 4위 탈락, 아니면 3위로 와일드카드 대기.</div>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#ffcf6b", marginBottom: 8 }}>🤝 한국이 비길 경우 — 스코어 조합별 결과</div>
+        <div style={{ overflowX: "auto", border: "1px solid #16212f", borderRadius: 10 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
+            <thead>
+              <tr style={{ background: "#0a1020", color: "#9ab" }}>
+                <th style={{ padding: "9px 8px", textAlign: "center", whiteSpace: "nowrap", borderRight: "1px solid #16212f" }}>한국-남아공<br />(무승부)</th>
+                {drawCols.map((c) => (<th key={c} style={{ padding: "9px 8px", textAlign: "center", whiteSpace: "nowrap", fontWeight: 600 }}>{c}</th>))}
+              </tr>
+            </thead>
+            <tbody>
+              {drawRows.map((r) => (
+                <tr key={r.label} style={{ borderTop: "1px solid #16212f" }}>
+                  <td style={{ padding: "8px", textAlign: "center", fontWeight: 800, background: "#0a1020", whiteSpace: "nowrap", borderRight: "1px solid #16212f" }}>{r.label}</td>
+                  {r.cells.map((v, i) => (
+                    <td key={i} style={{ padding: "8px", textAlign: "center", fontWeight: 700, color: v === "진출" ? "#2ecc71" : "#e6a817", background: v === "진출" ? "rgba(46,160,67,0.14)" : "rgba(230,168,23,0.1)" }}>{v === "진출" ? "진출" : "3위 대기"}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10, fontSize: 11.5, color: "#8aa" }}>
+          <span><span style={{ color: "#2ecc71", fontWeight: 800 }}>■</span> 진출 = 2위 직접 진출</span>
+          <span><span style={{ color: "#e6a817", fontWeight: 800 }}>■</span> 3위 대기 = 와일드카드(조 3위) 대기</span>
+        </div>
+
+        <div style={{ marginTop: 14, background: "#0a1020", borderRadius: 10, padding: "12px 14px", fontSize: 11.5, color: "#9ab", lineHeight: 1.7 }}>
+          • 순위 규정: <b style={{ color: "#cde" }}>승점 → 골득실 → 다득점 → 승자승</b> 순 (월드컵은 골득실이 맞대결보다 우선)<br />
+          • 골득실이 같으면 다득점, 그래도 같으면 한국의 체코전 승리(2-1, 승자승) 우위를 반영했습니다<br />
+          • <b style={{ color: "#cde" }}>와일드카드</b>: 48개국 체제에서 각 조 3위 중 상위 8개 팀이 추가 진출 → 다른 조 결과에 따라 최종 확정
+        </div>
       </div>
 
       <div style={{ background: "linear-gradient(135deg, rgba(200,16,46,0.08), rgba(0,0,0,0))", border: "1px solid rgba(200,16,46,0.2)", borderRadius: 16, padding: 22 }}>
