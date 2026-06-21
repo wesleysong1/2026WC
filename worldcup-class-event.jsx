@@ -49,6 +49,20 @@ function rosterCheck(id, name) {
   return { ok: true };
 }
 
+async function getAnswer() {
+  try { const r = await window.storage.get("wc2026a3_answer", true); return r && r.value ? JSON.parse(r.value) : null; } catch (e) { return null; }
+}
+async function setAnswer(ans) { await window.storage.set("wc2026a3_answer", JSON.stringify(ans), true); }
+async function listAllEntries() {
+  try {
+    const list = await window.storage.list("wc2026a3:", true);
+    const keys = list?.keys || [];
+    const out = [];
+    for (const k of keys) { try { const r = await window.storage.get(k, true); if (r?.value) out.push(JSON.parse(r.value)); } catch (e) {} }
+    return out;
+  } catch (e) { return []; }
+}
+
 export default function App() {
   const [tab, setTab] = useState("info"); // info | predict
   const C = { bg: "#0a0e16", card: "#0d1520", border: "#1e3a5f", accent: "#C8102E" };
@@ -118,8 +132,9 @@ export default function App() {
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ display: "flex", borderBottom: "1px solid #222", marginBottom: 26 }}>
           {[
-            { key: "info", label: "📋 경기 정보 & 진출 경우의 수" },
-            { key: "predict", label: "⚽ 승부예측 참여하기" },
+            { key: "info", label: "📋 경기 정보" },
+            { key: "predict", label: "⚽ 승부예측" },
+            { key: "result", label: "🏆 정답자 확인" },
           ].map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               flex: 1, background: "none", border: "none",
@@ -130,7 +145,7 @@ export default function App() {
           ))}
         </div>
 
-        {tab === "info" ? <InfoTab C={C} /> : <PredictTab C={C} closed={closed} />}
+        {tab === "info" ? <InfoTab C={C} /> : tab === "predict" ? <PredictTab C={C} closed={closed} /> : <AnswerTab C={C} />}
 
         <div style={{ textAlign: "center", padding: "24px 0 32px", borderTop: "1px solid #111", marginTop: 8 }}>
           <div style={{ fontSize: 12, color: "#333" }}>
@@ -798,6 +813,161 @@ function AdminPanel({ adminAuthed, pass, setPass, checkPass, adminError, entries
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, children, C }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function AnswerTab({ C }) {
+  const [answer, setAns] = useState(undefined);
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [pass, setPass] = useState("");
+  const [authed, setAuthed] = useState(false);
+  const [pErr, setPErr] = useState("");
+  const [fKr, setFKr] = useState("");
+  const [fSa, setFSa] = useState("");
+  const [fScorer, setFScorer] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const a = await getAnswer();
+      const all = await listAllEntries();
+      setAns(a || null);
+      setEntries(all || []);
+      if (a) { setFKr(String(a.scoreKr)); setFSa(String(a.scoreSa)); setFScorer(a.scorer); }
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const checkPass = () => { if (pass === ADMIN_PASSCODE) { setAuthed(true); setPErr(""); } else setPErr("비밀번호가 올바르지 않습니다."); };
+
+  const save = async () => {
+    setMsg("");
+    if (fKr === "" || fSa === "") return setMsg("스코어를 입력해주세요.");
+    if (!fScorer) return setMsg("첫 득점 선수를 선택해주세요.");
+    setSaving(true);
+    try {
+      await setAnswer({ scoreKr: parseInt(fKr), scoreSa: parseInt(fSa), scorer: fScorer });
+      await load();
+      setMsg("저장되었습니다. 정답자 명단이 갱신되었습니다.");
+    } catch (e) { setMsg("저장 오류: " + (e && e.message ? e.message : String(e))); }
+    finally { setSaving(false); }
+  };
+
+  const total = entries.length;
+  let scoreW = [], scorerW = [], bothW = [];
+  if (answer) {
+    scoreW = entries.filter((e) => e.scoreKr === answer.scoreKr && e.scoreSa === answer.scoreSa);
+    scorerW = entries.filter((e) => e.scorer === answer.scorer);
+    bothW = entries.filter((e) => e.scoreKr === answer.scoreKr && e.scoreSa === answer.scoreSa && e.scorer === answer.scorer);
+  }
+  const NameTags = ({ arr, color }) => (
+    arr.length === 0 ? <div style={{ color: "#667", fontSize: 13 }}>해당 정답자가 없습니다.</div> :
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+      {arr.map((e) => (
+        <span key={e.studentId + e.name} style={{ fontSize: 12.5, fontWeight: 600, color: "#dfe8f0", background: color + "1a", border: "1px solid " + color + "55", borderRadius: 10, padding: "6px 11px", whiteSpace: "nowrap" }}>
+          {e.name} <span style={{ color: "#8aa", fontWeight: 400 }}>{e.studentId}</span>
+        </span>
+      ))}
+    </div>
+  );
+
+  return (
+    <div>
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 50, color: "#667" }}>불러오는 중...</div>
+      ) : answer ? (
+        <>
+          <div style={{ background: "linear-gradient(135deg, #0d1b2a, #1a0a1a)", border: `1px solid ${C.border}`, borderRadius: 16, padding: "24px 20px", marginBottom: 18, textAlign: "center" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", color: "#C8102E", marginBottom: 12 }}>공식 경기 결과</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
+              <div style={{ textAlign: "center" }}><Flag code="kr" size={34} /><div style={{ fontSize: 12, color: "#9ab", marginTop: 4 }}>대한민국</div></div>
+              <div style={{ fontSize: 34, fontWeight: 900 }}>{answer.scoreKr} : {answer.scoreSa}</div>
+              <div style={{ textAlign: "center" }}><Flag code="za" size={34} /><div style={{ fontSize: 12, color: "#9ab", marginTop: 4 }}>남아공</div></div>
+            </div>
+            <div style={{ marginTop: 14, fontSize: 14 }}>⚽ 첫 득점: <b style={{ color: "#ffcf6b" }}>{answer.scorer}</b></div>
+          </div>
+          <Section title={"🏆 스코어 + 첫 득점 모두 정답 (" + bothW.length + "명)"} C={C}><NameTags arr={bothW} color="#ffcf6b" /></Section>
+          <Section title={"📊 정확한 스코어 정답 (" + scoreW.length + "명)"} C={C}><NameTags arr={scoreW} color="#2ecc71" /></Section>
+          <Section title={"⚽ 첫 득점 선수 정답 (" + scorerW.length + "명)"} C={C}><NameTags arr={scorerW} color="#5b8def" /></Section>
+          <div style={{ fontSize: 12, color: "#667", textAlign: "center", marginBottom: 14 }}>전체 참여 {total}명 기준 · 새로고침하면 최신 명단으로 갱신됩니다</div>
+        </>
+      ) : (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "40px 24px", textAlign: "center" }}>
+          <div style={{ fontSize: 44, marginBottom: 12 }}>⏳</div>
+          <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>아직 경기 결과가 입력되지 않았습니다</div>
+          <div style={{ fontSize: 13, color: "#9ab" }}>경기 종료 후 관리자가 결과를 입력하면 정답자 명단이 표시됩니다.</div>
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", marginTop: 8 }}>
+        <button onClick={() => setAdminOpen(!adminOpen)} style={{ background: "none", border: "none", color: "#3a4a5f", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>🔒 관리자 · 경기 결과 입력/수정</button>
+      </div>
+      {adminOpen && (
+        <div style={{ marginTop: 14, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22 }}>
+          {!authed ? (
+            <div style={{ maxWidth: 320, margin: "0 auto" }}>
+              <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="관리자 비밀번호" onKeyDown={(e) => e.key === "Enter" && checkPass()} style={{ ...inputStyle, marginTop: 0 }} />
+              {pErr && <div style={{ color: "#ff7088", fontSize: 12, marginTop: 8 }}>{pErr}</div>}
+              <button onClick={checkPass} style={{ width: "100%", marginTop: 10, padding: "11px", borderRadius: 10, border: "1px solid #2a3a4f", background: "#162536", color: "#cde", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>확인</button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14 }}>경기 결과 입력</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 18 }}>
+                <div style={{ textAlign: "center" }}>
+                  <Flag code="kr" size={26} />
+                  <div><input value={fKr} onChange={(e) => { setFKr(e.target.value.replace(/[^0-9]/g, "").slice(0, 2)); setMsg(""); }} inputMode="numeric" placeholder="0" style={{ ...scoreBox("#C8102E"), width: 60, height: 60, fontSize: 28, marginTop: 6 }} /></div>
+                </div>
+                <div style={{ fontSize: 24, color: "#445", fontWeight: 800 }}>:</div>
+                <div style={{ textAlign: "center" }}>
+                  <Flag code="za" size={26} />
+                  <div><input value={fSa} onChange={(e) => { setFSa(e.target.value.replace(/[^0-9]/g, "").slice(0, 2)); setMsg(""); }} inputMode="numeric" placeholder="0" style={{ ...scoreBox("#007A4D"), width: 60, height: 60, fontSize: 28, marginTop: 6 }} /></div>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, marginBottom: 8 }}>첫 득점 선수 선택</div>
+              {["KR", "SA"].map((tk) => {
+                const sq = SQUADS[tk];
+                return (
+                  <div key={tk} style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: sq.color }}><Flag code={sq.code} size={16} /> {sq.name}</div>
+                    {sq.positions.map((grp) => (
+                      <div key={grp.pos} style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 10, color: "#667", marginBottom: 5 }}>{grp.pos}</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {grp.players.map((p) => { const val = sq.name + " " + p; return <PlayerChip key={p} label={p} color={sq.color} selected={fScorer === val} onClick={() => { setFScorer(val); setMsg(""); }} />; })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 10, color: "#667", marginBottom: 5 }}>기타</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {SPECIAL_OPTIONS.map((p) => <PlayerChip key={p} label={p} color="#8a93a3" selected={fScorer === p} onClick={() => { setFScorer(p); setMsg(""); }} />)}
+                </div>
+              </div>
+              {fScorer && <div style={{ fontSize: 13, color: "#aaa", marginTop: 10 }}>선택: <b style={{ color: "#ffcf6b" }}>{fScorer}</b></div>}
+              {msg && <div style={{ fontSize: 13, color: msg.indexOf("저장되") === 0 ? "#2ecc71" : "#ff7088", marginTop: 10 }}>{msg}</div>}
+              <button onClick={save} disabled={saving} style={{ width: "100%", marginTop: 16, padding: "14px", borderRadius: 10, border: "none", background: saving ? "#333" : "linear-gradient(135deg,#1d8a4f,#0f6b3a)", color: "#fff", fontSize: 15, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer" }}>{saving ? "저장 중..." : "💾 결과 저장 & 자동 채점"}</button>
+            </div>
+          )}
         </div>
       )}
     </div>
