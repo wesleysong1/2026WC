@@ -15,15 +15,56 @@
   ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: #2a3a4f; border-radius: 4px; }
 </style>
 
-<!-- React + Babel + SheetJS + Supabase : 모두 CDN, 빌드 불필요 -->
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<!-- React + Babel + SheetJS + Supabase : 모두 CDN(jsdelivr), 빌드 불필요 -->
+<script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
 <div id="root"></div>
+
+<!-- 진단: 오류를 검은 화면 대신 페이지에 표시 -->
+<script>
+  function showFatal(title, detail) {
+    var r = document.getElementById("root");
+    if (!r) return;
+    if (r.getAttribute("data-rendered") === "1") return;
+    r.innerHTML =
+      '<div style="max-width:640px;margin:60px auto;padding:24px;font-family:system-ui,sans-serif;' +
+      'background:#1a0d0d;border:1px solid #5a2a2a;border-radius:14px;color:#ffd7d7;line-height:1.6">' +
+      '<div style="font-size:18px;font-weight:800;margin-bottom:10px;color:#ff8a8a">⚠️ ' + title + '</div>' +
+      '<div style="font-size:13px;color:#e6b8b8;white-space:pre-wrap">' + (detail || "") + '</div>' +
+      '<div style="font-size:12px;color:#a88;margin-top:14px">새로고침해도 같은 화면이면, 위 메시지를 캡처해 알려주세요.</div>' +
+      '</div>';
+  }
+  window.addEventListener("error", function (e) {
+    showFatal("스크립트 오류가 발생했습니다", (e && e.message ? e.message : "") + (e && e.filename ? "\n(" + e.filename + ")" : ""));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    showFatal("처리되지 않은 오류", e && e.reason ? String(e.reason) : "");
+  });
+  window.addEventListener("load", function () {
+    setTimeout(function () {
+      var r = document.getElementById("root");
+      if (r && r.getAttribute("data-rendered") === "1") return;
+      var missing = [];
+      if (typeof React === "undefined") missing.push("React");
+      if (typeof ReactDOM === "undefined") missing.push("ReactDOM");
+      if (typeof Babel === "undefined") missing.push("Babel");
+      if (typeof XLSX === "undefined") missing.push("SheetJS(XLSX)");
+      if (typeof supabase === "undefined") missing.push("Supabase");
+      if (missing.length) {
+        showFatal("필수 라이브러리를 불러오지 못했습니다",
+          "불러오기 실패: " + missing.join(", ") +
+          "\n\n학교/기관 네트워크가 cdn.jsdelivr.net 접속을 차단하면 발생할 수 있습니다. 다른 네트워크(휴대폰 테더링 등)에서 다시 시도하거나 관리자에게 차단 해제를 요청하세요.");
+      } else {
+        showFatal("화면을 그리지 못했습니다", "라이브러리는 로드됐으나 렌더링이 완료되지 않았습니다. 콘솔(F12)의 오류 메시지를 확인해 주세요.");
+      }
+    }, 5000);
+  });
+</script>
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect } = React;
@@ -702,7 +743,14 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+try {
+  var rootEl = document.getElementById("root");
+  ReactDOM.createRoot(rootEl).render(<App />);
+  rootEl.setAttribute("data-rendered", "1");
+} catch (err) {
+  if (typeof showFatal === "function") showFatal("앱 시작 중 오류", String(err && err.stack ? err.stack : err));
+  else throw err;
+}
 </script>
 </body>
 </html>
