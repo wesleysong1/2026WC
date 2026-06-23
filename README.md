@@ -68,6 +68,19 @@ create policy "anyone can insert" on predictions for insert with check (true);
 > create policy "answer update" on answer_key for update using (true) with check (true);
 > ```
 
+> **관리자 수동 추가 기능을 쓰려면** 아래 테이블도 만드세요 (명단에 없던 참여자를 관리자모드에서 추가):
+>
+> ```sql
+> create table if not exists roster_extra (
+>   student_id text not null,
+>   name text not null,
+>   primary key (student_id, name)
+> );
+> alter table roster_extra enable row level security;
+> create policy "roster read"   on roster_extra for select using (true);
+> create policy "roster insert" on roster_extra for insert with check (true);
+> ```
+
 3. 좌측 **Project Settings → API** 에서 두 값을 복사합니다.
    - **Project URL** (예: `https://abcdefgh.supabase.co`)
    - **anon public** key
@@ -90,6 +103,7 @@ const SUPABASE_ANON_KEY = "PASTE_ANON_KEY";  // ← anon public key
   - 같은 학번+이름으로는 한 번만 참여할 수 있습니다 (중복·수정 불가).
   - 참여 마감 시각(2026-06-25 09:00 KST)이 지나면 참여 버튼이 자동으로 닫힙니다. 마감 시각은 `index.html` 상단의 `DEADLINE` 에서 변경할 수 있고, 명단은 `ROSTER` 에서 수정합니다.
 - **🏆 정답자 확인 탭**: 경기 종료 후 관리자가 실제 스코어와 첫 득점 선수를 입력하면, 전체 제출을 자동 채점해 (1) 스코어+첫득점 모두 정답, (2) 정확한 스코어 정답, (3) 첫 득점 선수 정답 명단을 보여줍니다. 결과 입력은 같은 관리자 비밀번호로 보호됩니다.
+- **참여자 수동 추가**: 승부예측 화면의 🔒 관리자 영역에서 학번·이름을 입력해 명단에 없던 학생/교사를 즉시 추가할 수 있습니다 (모든 기기에 반영).
 - **관리자**: 참여 화면 맨 아래 **🔒 관리자** → 비밀번호 입력 → 전체 제출 현황 확인 및 **엑셀 다운로드**
   - 비밀번호는 `index.html` 상단 `ADMIN_PASSCODE = "admin2026"` 에서 변경하세요.
   - Supabase 대시보드의 Table Editor에서도 데이터를 직접 보거나 CSV로 내려받을 수 있습니다.
