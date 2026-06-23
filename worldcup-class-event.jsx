@@ -132,20 +132,21 @@ export default function App() {
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ display: "flex", borderBottom: "1px solid #222", marginBottom: 26 }}>
           {[
-            { key: "info", label: "📋 경기 정보" },
+            { key: "info", label: "📋 경기정보" },
             { key: "predict", label: "⚽ 승부예측" },
-            { key: "result", label: "🏆 정답자 확인" },
+            { key: "stats", label: "📊 통계" },
+            { key: "result", label: "🏆 정답자" },
           ].map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
               flex: 1, background: "none", border: "none",
               borderBottom: tab === t.key ? "2px solid #C8102E" : "2px solid transparent",
-              color: tab === t.key ? "#fff" : "#667", padding: "14px 12px", fontSize: 14,
+              color: tab === t.key ? "#fff" : "#667", padding: "13px 4px", fontSize: 13, whiteSpace: "nowrap",
               fontWeight: tab === t.key ? 700 : 400, cursor: "pointer", transition: "all 0.2s",
             }}>{t.label}</button>
           ))}
         </div>
 
-        {tab === "info" ? <InfoTab C={C} /> : tab === "predict" ? <PredictTab C={C} closed={closed} /> : <AnswerTab C={C} />}
+        {tab === "info" ? <InfoTab C={C} /> : tab === "predict" ? <PredictTab C={C} closed={closed} /> : tab === "stats" ? <StatsTab C={C} onGoPredict={() => setTab("predict")} /> : <AnswerTab C={C} />}
 
         <div style={{ textAlign: "center", padding: "24px 0 32px", borderTop: "1px solid #111", marginTop: 8 }}>
           <div style={{ fontSize: 12, color: "#333" }}>
@@ -456,6 +457,7 @@ function PredictTab({ C, closed }) {
         return;
       }
       await window.storage.set(keyFor(entry.studentId, entry.name), JSON.stringify(entry), true);
+      try { await window.storage.set("wc2026a3_submitted", JSON.stringify({ studentId: entry.studentId, name: entry.name }), false); } catch (e) {}
       setScorer(chosenScorer);
       await loadStats();
       setPhase("done");
@@ -815,6 +817,54 @@ function AdminPanel({ adminAuthed, pass, setPass, checkPass, adminError, entries
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatsTab({ C, onGoPredict }) {
+  const [me, setMe] = useState(undefined);
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const load = async () => {
+    setLoading(true);
+    let m = null;
+    try { const r = await window.storage.get("wc2026a3_submitted", false); m = r && r.value ? JSON.parse(r.value) : null; } catch (e) {}
+    setMe(m || null);
+    if (m) { try { setEntries(await listAllEntries()); } catch (e) { setEntries([]); } }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+  const mine = me ? entries.find((e) => e.studentId === me.studentId && e.name === me.name) : null;
+
+  if (loading) return <div style={{ textAlign: "center", padding: 50, color: "#667" }}>불러오는 중...</div>;
+
+  if (!me) {
+    return (
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "44px 24px", textAlign: "center" }}>
+        <div style={{ fontSize: 44, marginBottom: 12 }}>🔒</div>
+        <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>예측을 제출한 분만 볼 수 있어요</div>
+        <div style={{ fontSize: 13, color: "#9ab", lineHeight: 1.7, marginBottom: 20 }}>승부예측에 참여하면 다른 학생들의 통계를<br />이 화면에서 언제든 다시 볼 수 있습니다.</div>
+        <button onClick={onGoPredict} style={{ background: "linear-gradient(135deg, #C8102E, #8b0020)", color: "#fff", border: "none", borderRadius: 12, padding: "13px 32px", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>승부예측 참여하러 가기 →</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontSize: 13, color: "#9ab" }}>지금까지 <b style={{ color: "#fff", fontSize: 17 }}>{entries.length}</b>명 참여</div>
+        <button onClick={load} style={{ padding: "7px 14px", borderRadius: 9, border: "1px solid #2a3a4f", background: "transparent", color: "#cde", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🔄 새로고침</button>
+      </div>
+      {mine && (
+        <div style={{ background: "#0a1020", border: `1px solid ${C.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 16, fontSize: 13.5, lineHeight: 1.9 }}>
+          <div style={{ fontSize: 12, color: "#7aa3cc", fontWeight: 700, marginBottom: 4 }}>내 예측 — {mine.name} ({mine.studentId})</div>
+          <div>📊 스코어: <b>한국 {mine.scoreKr} : {mine.scoreSa} 남아공</b> · ⚽ 첫 득점: <b>{mine.scorer}</b></div>
+        </div>
+      )}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 18, padding: "24px 22px" }}>
+        <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 18 }}>📊 학생들의 예측 통계</div>
+        <StatsPanel entries={entries} />
+      </div>
     </div>
   );
 }
