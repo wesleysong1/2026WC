@@ -832,7 +832,7 @@ function StatsTab({ onGoPredict }) {
           <div style={{ fontSize: 13, color: "#9ab", marginTop: 6, lineHeight: 1.6 }}>내가 제출한 학번·이름과<br />예측 내용(스코어·첫 득점)을 그대로 입력하면 통계를 볼 수 있어요.</div>
         </div>
         <Label>학번</Label>
-        <input value={sId} onChange={(e) => { setSId(e.target.value); setError(""); }} placeholder="예: 1101 (교사는 '교사')" maxLength={15} style={inputStyle} />
+        <input value={sId} onChange={(e) => { setSId(e.target.value); setError(""); }} placeholder="예: 1101" maxLength={15} style={inputStyle} />
         <Label style={{ marginTop: 14 }}>이름</Label>
         <input value={sName} onChange={(e) => { setSName(e.target.value); setError(""); }} placeholder="예: 송우현" maxLength={30} style={inputStyle} />
 
